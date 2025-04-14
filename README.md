@@ -11,6 +11,7 @@ This is a **Flask-based web application** that allows users to **create and visu
 - API endpoint to retrieve tree data in JSON format.
 - Dynamically assign colors to nodes based on surname categories.
 
+## Need Help in making it more visually appealing (Pull requests are welcome!)
 ---
 
 ## 🛠️ Setup Instructions
