@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Tree</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .tree-container {
+            width: 100%;
+            height: 80vh;
+            border: 1px solid #ccc;
+            margin-bottom: 20px;
+            background-color: #e8f4e5;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            overflow: auto;
+        }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .color-box {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #000;
+            border-radius: 50%;
+        }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 15px;
+        }
+        .leaf {
+            cursor: pointer;
+            transition: transform 0.2s, filter 0.2s;
+            filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.3));
+        }
+
+        .leaf:hover {
+            transform: scale(1.1);
+            filter: drop-shadow(3px 3px 5px rgba(0,0,0,0.4));
+        }
+
+        .leaf-text {
+            font-size: 12px;
+            font-weight: bold;
+            fill: #ffffff;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            pointer-events: none;
+            text-anchor: middle;
+        }
+        .branch {
+            stroke-width: 5px;
+            fill: none;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover {
+            color: black;
+        }
+        .person-details {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            display: none;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            padding: 10px 18px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .trunk {
+            fill: #8B4513;
+            stroke: #5D2906;
+            stroke-width: 1;
+        }
+    .pebble-container {
+        position: relative;
+        z-index: 1000; /* Ensure pebbles stay on top */
+    }
+    
+    .pebble {
+        stroke: #333;
+        stroke-width: 1;
+        cursor: pointer;
+        z-index: 1000;
+    }
+    
+    .pebble-text {
+        font-size: 10px;
+        text-anchor: middle;
+        pointer-events: none;
+        z-index: 1001; /* Text should be above pebbles */
+        fill: #000;
+        font-weight: bold;
+    }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Tayal Parivaar</h1>
+        
+        <div class="tree-container" id="tree-viz"></div>
+        
+        <div class="controls">
+            <button id="add-person-btn">Add Person</button>
+            <button id="add-surname-btn">Add Surname</button>
+        </div>
+        
+        <div class="person-details" id="person-details">
+            <h3>Person Details</h3>
+            <div id="details-content"></div>
+            <div class="person-controls">
+                <button id="edit-person-btn">Edit</button>
+                <button id="delete-person-btn">Delete</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal for adding a person -->
+    <div id="add-person-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Add New Person</h2>
+            <form action="{{ url_for('add_person') }}" method="POST">
+                <div>
+                    <label for="name">First Name:</label>
+                    <input type="text" id="name" name="name" required>
+                </div>
+                <div>
+                    <label for="surname">Surname:</label>
+                    <select class="searchable-select" id="surname" name="surname" required>
+                        <option value="">Select a surname</option>
+                        {% for surname in surnames %}
+                            <option value="{{ surname.surname }}">{{ surname.surname }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="parent_id">Parent:</label>
+                    <select class="searchable-select" id="parent_id" name="parent_id">
+                        <option value="">None</option>
+                        {% for person in people %}
+                            <option value="{{ person._id }}">{{ person.name }} {{ person.surname }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit">Add Person</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal for adding a surname -->
+    <div id="add-surname-modal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Add New Surname</h2>
+            <form action="{{ url_for('add_surname') }}" method="POST">
+                <div>
+                    <label for="surname-name">Surname:</label>
+                    <input type="text" id="surname-name" name="surname" required>
+                </div>
+                <div>
+                    <label for="color">Color:</label>
+                    <input type="color" id="color" name="color" required>
+                </div>
+                <button type="submit">Add Surname</button>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+    $('.searchable-select').select2({
+        placeholder: "Select an option",
+        allowClear: true,
+        width: 'resolve' // auto-size to container
+        });
+
+        // Tree visualization using D3.js
+    const treeData = {{ people|tojson|safe }};
+    const surnameData = {{ surnames|tojson|safe }};
+
+    // Create a map of surname to color
+    const surnameColors = {};
+    surnameData.forEach(s => {
+        surnameColors[s.surname] = s.color;
+    });
+
+// Set up the D3 visualization
+document.addEventListener('DOMContentLoaded', function() {
+    // Add CSS rules for scrollable container
+    const style = document.createElement('style');
+    style.textContent = `
+        .tree-container {
+            overflow: hidden;
+            position: relative;
+        }
+        .tree-container svg {
+            min-width: 100%;
+            min-height: 100%;
+        }
+    `;
+    document.head.appendChild(style);
+    
+    renderFamilyTree(treeData, surnameColors);
+    
+    // Modal functionality
+    const addPersonBtn = document.getElementById('add-person-btn');
+    const addSurnameBtn = document.getElementById('add-surname-btn');
+    const addPersonModal = document.getElementById('add-person-modal');
+    const addSurnameModal = document.getElementById('add-surname-modal');
+    const closeButtons = document.getElementsByClassName('close');
+    
+    addPersonBtn.onclick = function() {
+        addPersonModal.style.display = 'block';
+    }
+    
+    addSurnameBtn.onclick = function() {
+        addSurnameModal.style.display = 'block';
+    }
+    
+    // Close modals when clicking on X
+    for (let i = 0; i < closeButtons.length; i++) {
+        closeButtons[i].onclick = function() {
+            addPersonModal.style.display = 'none';
+            addSurnameModal.style.display = 'none';
+        }
+    }
+    
+    // Close modals when clicking outside
+    window.onclick = function(event) {
+        if (event.target === addPersonModal) {
+            addPersonModal.style.display = 'none';
+        }
+        if (event.target === addSurnameModal) {
+            addSurnameModal.style.display = 'none';
+        }
+    }
+});
+
+// This function should be updated in your script section of index.html
+function renderFamilyTree(people, surnameColors) {
+    // Clear previous visualization
+    d3.select('#tree-viz').selectAll('*').remove();
+    
+    // Get container dimensions
+    const containerWidth = document.getElementById('tree-viz').clientWidth;
+    const containerHeight = document.getElementById('tree-viz').clientHeight;
+    
+    // Build parent-child relationships
+    const familyMap = {};
+    people.forEach(person => {
+        familyMap[person._id] = {
+            person,
+            children: []
+        };
+    });
+    
+    // Fill in children arrays
+    people.forEach(person => {
+        if (person.parent_id && familyMap[person.parent_id]) {
+            familyMap[person.parent_id].children.push(person._id);
+        }
+    });
+    
+    // Identify root nodes
+    const rootNodes = people.filter(person => 
+        !person.parent_id || !people.some(p => p._id === person.parent_id)
+    ).map(person => person._id);
+    
+    // Calculate positioning
+    const nodePositions = {};
+    const links = [];
+    
+    // Position root nodes - use 220 degree span instead of just straight line
+    // Calculate radians for 220 degrees = 220 * (Math.PI / 180)
+    const angleSpan = -180 * (Math.PI / 180);
+    const rootStartAngle = (Math.PI / 2 - angleSpan / 2); // Start from left side of the semicircle
+    
+    rootNodes.forEach((nodeId, index) => {
+    const totalRoots = rootNodes.length;
+    let x, y;
+    
+    if (totalRoots === 1) {
+        // Single root centered above trunk
+        x = 0;
+        y = -150;
+    } else {
+        // Multiple roots distributed evenly
+        const isEven = totalRoots % 2 === 0;
+        const middleIndex = Math.floor(totalRoots / 2);
+        const spacing = 200; // Horizontal spacing between roots
+        
+        if (isEven) {
+            // Even number of roots
+            const offset = (index - middleIndex + 0.5) * spacing;
+            x = offset;
+            y = - Math.abs(offset/3); // Slight arc effect
+        } else {
+            // Odd number of roots
+            const offset = (index - middleIndex) * spacing;
+            x = offset;
+            y = -Math.abs(offset/3); // Slight arc effect
+        }
+    }
+    
+    nodePositions[nodeId] = {
+        x: x,
+        y: y,
+        level: 0
+    };
+    const childSpacing = 120; // Base spacing between children
+    const levelHeight = 150; // Vertical distance between levels
+    
+    function positionChildren(parentId, level) {
+        const children = familyMap[parentId].children;
+        if (children.length === 0) return;
+        
+        const parentPos = nodePositions[parentId];
+        const totalWidth = (children.length - 1) * childSpacing;
+        const startX = parentPos.x - totalWidth / 2;
+        
+        children.forEach((childId, index) => {
+            const x = startX + (index * childSpacing);
+            const y = parentPos.y - levelHeight;
+            
+            nodePositions[childId] = {
+                x: x,
+                y: y,
+                level: level + 1
+            };
+            
+            links.push({
+                source: parentId,
+                target: childId,
+                isStraight: false
+            });
+            
+            positionChildren(childId, level + 1);
+        });
+    }
+    
+    positionChildren(nodeId, 0);
+});
+    
+    function positionChildren(parentId, level) {
+        const parent = familyMap[parentId];
+        const childIds = parent.children;
+        
+        if (childIds.length === 0) return;
+        
+        const nextLevel = level + 1;
+        const childY = -100 - (nextLevel * 120); // Height offset per level
+        
+        // Get parent position
+        const parentPos = nodePositions[parentId];
+        
+        // Determine position in the arc
+        const centerX = 0;
+        const relativeX = parentPos.x - centerX;
+        
+        // Calculate direction bias based on position in the 220-degree arc
+        // This will help spread children in a natural way
+        const directionBias = relativeX / (containerWidth * 0.4); // Normalize the bias
+        
+        // Base spread angle - wider for a more natural tree
+        const minSpacing = 120; // Increased from 60 to 120
+        const baseAngle = Math.PI / 1.5; // Increased angle spread
+        const levelHeight = 150; // Increased from 120 to 150
+        const distance = 180;
+        
+        // Position each child with enforced spacing
+        let prevChildX = null;
+        
+        // Sort children based on their relative position to center
+        const indexOrder = relativeX < 0 ? 
+            [...Array(childIds.length).keys()].reverse() : 
+            [...Array(childIds.length).keys()];
+        
+        // First pass - calculate initial positions
+        const initialPositions = {};
+        
+        indexOrder.forEach(index => {
+            const childId = childIds[index];
+            let angle, distance;
+            
+            if (childIds.length === 1) {
+                // Single child - angled in parent's direction
+                angle = directionBias * baseAngle;
+                distance = 180; // Increased from 120 to 180
+            } else {
+                // Multiple children - create a fan that follows the arc direction
+                const normalizedIndex = childIds.length > 1 ? index / (childIds.length - 1) : 0.5;
+                angle = baseAngle * (normalizedIndex - 0.5 + directionBias);
+                distance = 180; // Increased from 120 to 180
+            }
+            
+            // Calculate initial position with wider spacing
+            initialPositions[childId] = {
+                x: parentPos.x + Math.sin(angle) * distance,
+                y: childY
+            };
+        });
+        
+        // Second pass - adjust positions to avoid overlap
+        let lastX = null;
+        indexOrder.forEach(index => {
+            const childId = childIds[index];
+            const initialPos = initialPositions[childId];
+            
+            // If this is the first child, use its initial position
+            if (lastX === null) {
+                lastX = initialPos.x;
+                nodePositions[childId] = {
+                    x: initialPos.x,
+                    y: initialPos.y,
+                    level: nextLevel
+                };
+            } else {
+                // For subsequent children, ensure minimum spacing
+                const direction = relativeX < 0 ? -1 : 1; // Direction to enforce spacing
+                const requiredX = lastX + (direction * minSpacing);
+                
+                // Use the position that ensures minimum spacing
+                if ((relativeX < 0 && initialPos.x > requiredX) || 
+                    (relativeX > 0 && initialPos.x < requiredX) ||
+                    (relativeX === 0 && Math.abs(initialPos.x - lastX) < minSpacing)) {
+                    // Need to adjust position
+                    nodePositions[childId] = {
+                        x: requiredX,
+                        y: initialPos.y,
+                        level: nextLevel
+                    };
+                    lastX = requiredX;
+                } else {
+                    // Initial position is fine
+                    nodePositions[childId] = {
+                        x: initialPos.x,
+                        y: initialPos.y,
+                        level: nextLevel
+                    };
+                    lastX = initialPos.x;
+                }
+            }
+            
+            // Add link between parent and child
+            links.push({
+                source: parentId,
+                target: childId,
+                isStraight: false
+            });
+            
+            // Position this node's children recursively
+            positionChildren(childId, nextLevel);
+        });
+    }
+    
+    // After positioning all nodes, calculate the bounds of the tree
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    
+    Object.values(nodePositions).forEach(pos => {
+        minX = Math.min(minX, pos.x);
+        maxX = Math.max(maxX, pos.x);
+        minY = Math.min(minY, pos.y);
+        maxY = Math.max(maxY, pos.y);
+    });
+    
+    // Add padding around the tree
+    const padding = 150;
+    minX -= padding;
+    maxX += padding;
+    minY -= padding;
+    maxY += padding + 150; // Extra padding at bottom for trunk and pebbles
+    
+    // Calculate dimensions needed for the tree
+    const treeWidth = maxX - minX;
+    const treeHeight = maxY - minY;
+    
+    // Create SVG with appropriate dimensions
+    const svg = d3.select('#tree-viz')
+        .append('svg')
+        .attr('width', '100%')
+        .attr('height', '100%')
+        .attr('viewBox', `${minX} ${minY} ${treeWidth} ${treeHeight}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet');
+    
+    // Add sky gradient
+    const defs = svg.append('defs');
+    const gradient = defs.append('linearGradient')
+        .attr('id', 'sky-gradient')
+        .attr('x1', '0%')
+        .attr('y1', '0%')
+        .attr('x2', '0%')
+        .attr('y2', '100%');
+    
+    gradient.append('stop')
+        .attr('offset', '0%')
+        .attr('stop-color', '#87CEEB');
+    
+    gradient.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', '#e8f4e5');
+    
+    // Add sky background that covers the whole viewBox
+    svg.append('rect')
+        .attr('x',-10000)
+        .attr('y', minY)
+        .attr('width', 100000)
+        .attr('height', 100000)
+        .attr('fill', 'url(#sky-gradient)');
+    
+    // Group for the entire tree (including trunk and pebbles)
+    const treeGroup = svg.append('g');
+    
+    // Calculate trunk position - this will be at the bottom center
+    const trunkY = maxY - 100;
+    const trunkBottom = trunkY + 100; // The bottom of the trunk
+    
+    // Draw trunk at the bottom center
+    treeGroup.append('path')
+        .attr('class', 'trunk')
+        .attr('d', 'M-30,0 C-50,-300 70,-300 30,0 L 30,100 C 20,110 -20,110 -30,100 Z')
+        .attr('transform', `translate(0, ${trunkY})`)
+        .attr('fill', '#8B4513')
+        .attr('stroke', '#5D2906')
+        .attr('stroke-width', 1);
+    
+    // Draw branches
+    treeGroup.selectAll('.branch')
+        .data(links)
+        .enter()
+        .append('path')
+        .attr('class', 'branch')
+        .attr('stroke', '#8B4513')
+        .attr('fill', 'none')
+        .attr('stroke-width', 5)
+        .attr('d', d => {
+            const source = nodePositions[d.source];
+            const target = nodePositions[d.target];
+            
+            if (d.isStraight) {
+                return `M${source.x},${source.y} L${target.x},${target.y}`;
+            } else {
+                const midY = (source.y + target.y) / 2;
+                return `M${source.x},${source.y} Q${target.x},${midY} ${target.x},${target.y}`;
+            }
+        });
+    
+    // Draw leaves
+    const nodes = Object.entries(nodePositions).map(([id, position]) => {
+        const person = familyMap[id].person;
+        return {
+            id,
+            x: position.x,
+            y: position.y,
+            name: person.name,
+            surname: person.surname,
+            nameLength: (person.name + person.surname).length
+        };
+    });
+    
+    const leafGroups = treeGroup.selectAll('.leaf-group')
+        .data(nodes)
+        .enter()
+        .append('g')
+        .attr('class', 'leaf-group')
+        .attr('transform', d => `translate(${d.x}, ${d.y})`);
+    
+    // Add leaf shape
+    leafGroups.append('path')
+        .attr('class', 'leaf')
+        .attr('d', `
+            M 0,0
+            c 15,-20 40,-20 60,-10
+            c 20,10 20,30 0,40
+            c -20,10 -45,10 -60,-10
+            c -15,-20 -15,-40 0,-20
+            z
+        `)
+        .attr('fill', d => surnameColors[d.surname] || '#00aa00')
+        .attr('stroke', '#006600')
+        .attr('stroke-width', 1)
+        .attr('transform', d => {
+            const scale = Math.max(0.8, Math.min(1.5, d.nameLength / 10));
+            return `scale(${scale}) rotate(-45)`;
+        })
+        .on('click', function(event, d) {
+            const person = familyMap[d.id].person;
+            if (person) showPersonDetails(person);
+        });
+    
+    // Add text to leaves
+    leafGroups.append('text')
+        .attr('class', 'leaf-text')
+        .attr('dy', -15)
+        .attr('dx', 25)
+        .text(d => d.name);
+    
+    leafGroups.append('text')
+        .attr('class', 'leaf-text')
+        .attr('dy', -5)
+        .attr('dx', 25)
+        .text(d => d.surname);
+    
+    // Draw surname pebbles at bottom of the trunk
+    // This is part of the tree group so it will move with the trunk during zoom/pan
+    const pebbleGroup = treeGroup.append('g')
+        .attr('class', 'pebble-container') 
+        .attr('transform', `translate(0, ${trunkBottom})`); // Position just below the trunk
+    
+    const pebbleWidth = 60;
+    const totalSurnames = Object.keys(surnameColors).length;
+    const totalPebbleWidth = pebbleWidth * totalSurnames;
+    const startX = -totalPebbleWidth / 2+40;
+    
+    // Draw pebbles
+    pebbleGroup.selectAll('.pebble-group')
+        .data(Object.entries(surnameColors))
+        .enter()
+        .append('g')
+        .attr('class', 'pebble-group')
+        .attr('transform', (d, i) => `translate(${startX + (i * pebbleWidth)}, 0)`)
+        .each(function(d) {
+            // Add pebble shape
+            d3.select(this)
+                .append('ellipse')
+                .attr('class', 'pebble')
+                .attr('rx', 35)
+                .attr('ry', 20)
+                .attr('fill', d[1])
+                .attr('stroke', '#666');
+            
+            // Add surname text
+            d3.select(this)
+                .append('text')
+                .attr('class', 'pebble-text')
+                .attr('dy', 5)
+                .attr('text-anchor', 'middle')
+                .text(d[0]);
+        });
+    // Add zoom functionality
+    const zoom = d3.zoom()
+        .scaleExtent([0.5, 3])
+        .on('zoom', (event) => {
+            treeGroup.attr('transform', event.transform);
+        });
+    
+    svg.call(zoom);
+    
+    // Center the view initially
+    const initialTransform = d3.zoomIdentity
+        .translate(0, 0)
+        .scale(0.9);
+    svg.call(zoom.transform, initialTransform);
+}
+
+function showPersonDetails(person) {
+    const detailsDiv = document.getElementById('person-details');
+    const detailsContent = document.getElementById('details-content');
+    const editBtn = document.getElementById('edit-person-btn');
+    const deleteBtn = document.getElementById('delete-person-btn');
+    
+    let detailsHTML = `
+        <p><strong>FirstName:</strong> ${person.name}</p>
+        <p><strong>Surname:</strong> ${person.surname}</p>
+    `;
+    
+    if (person.parent_id) {
+        const parent = treeData.find(p => p._id === person.parent_id);
+        if (parent) {
+            detailsHTML += `<p><strong>Parent:</strong> ${parent.name} ${parent.surname}</p>`;
+        }
+    }
+    
+    detailsContent.innerHTML = detailsHTML;
+    
+    editBtn.onclick = () => window.location.href = `/edit_person/${person._id}`;
+    deleteBtn.onclick = () => {
+        if (confirm(`Are you sure you want to delete ${person.name} ${person.surname}?`)) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = `/delete_person/${person._id}`;
+            document.body.appendChild(form);
+            form.submit();
+        }
+    };
+    
+    detailsDiv.style.display = 'block';
+}
+    </script>
+</body>
+</html>
