@@ -22,7 +22,9 @@ git clone https://github.com/your-username/family-tree-app.git
 cd family-tree-app
 ```
 ### 2.  Install dependencies
-```pip install -r requirements.txt```
+```
+pip install -r requirements.txt
+```
 
 ### 3. Create a .env file
 To run the app locally, you need to store your MongoDB URI in a .env file in the root directory of the project.
@@ -35,7 +37,9 @@ MONGO_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/family_tree
 Replace <username>, <password> with your actual MongoDB connection information.
 
 ### 4. Run the app
+```
 python app.py
+```
 Open your browser and navigate to http://localhost:5000 to use the app.
 
 # 🤝 Contributing

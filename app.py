@@ -188,4 +188,4 @@ def edit_person(person_id):
                          surnames=surnames)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
